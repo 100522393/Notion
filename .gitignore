@@ -1,3 +1,5 @@
 .idea
 .venv
 export/
+.env
+__pycache__/
