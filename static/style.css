@@ -1,0 +1,139 @@
+:root {
+    --bg: #121212;
+    --panel: #1e1e1e;
+    --text: #f0f0f0;
+    --muted: #aaa;
+    --input-bg: #333;
+    --input-border: #555;
+    --radius: 10px;
+    --accent-color: #00ffff;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 0 10px;
+}
+
+.container {
+    background-color: var(--panel);
+    padding: 30px;
+    border-radius: var(--radius);
+    width: 350px;
+    max-width: 95%;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+h1 {
+    margin-bottom: 25px;
+    font-size: 1.8em;
+}
+
+label {
+    display: block;
+    text-align: left;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: var(--muted);
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 25px;
+    border: 2px solid var(--input-border);
+    border-radius: 5px;
+    font-size: 1em;
+    background-color: var(--input-bg);
+    color: white;
+    outline: none;
+}
+
+input[type="text"]:focus {
+    border-color: var(--accent-color);
+}
+
+button {
+    background-color: var(--panel);
+    color: white;
+    padding: 12px 20px;
+    border: 2px solid var(--accent-color);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1.1em;
+    width: 100%;
+    font-weight: bold;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 5px var(--accent-color);
+}
+
+button:hover {
+    background-color: var(--accent-color);
+    color: black;
+    box-shadow:
+        0 0 5px var(--accent-color),
+        0 0 15px var(--accent-color),
+        0 0 25px var(--accent-color),
+        0 0 40px rgba(255, 255, 255, 0.2);
+    transform: scale(1.03);
+}
+
+p {
+    color: var(--muted);
+    font-size: 1.1em;
+    margin-bottom: 12px;
+}
+
+.success {
+    border: 1px solid var(--accent-color);
+    box-shadow:
+        0 0 5px var(--accent-color),
+        0 0 15px var(--accent-color),
+        0 0 25px var(--accent-color),
+        0 0 40px rgba(255, 255, 255, 0.1);
+}
+
+.success h1 {
+    color: var(--accent-color);
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.error {
+    border: 1px solid #ff4d4f;
+    box-shadow:
+        0 0 5px #ff4d4f,
+        0 0 15px rgba(255, 77, 79, 0.5);
+}
+
+.error h1 {
+    color: #ff4d4f;
+}
+
+@media (max-width: 600px) {
+    .container {
+        width: 95%;
+        padding: 20px 15px;
+    }
+
+    h1 {
+        font-size: 1.5em;
+    }
+
+    button {
+        padding: 10px 15px;
+        font-size: 1em;
+    }
+}

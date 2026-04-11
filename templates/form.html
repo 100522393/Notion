@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block body %}
+<main class="container">
+    <h1>{{ titulo }}</h1>
+
+    <form action="{{ action_url }}" method="post">
+        <label for="{{ input_name }}">Nombre del contenido:</label>
+        <input
+            type="text"
+            id="{{ input_name }}"
+            name="{{ input_name }}"
+            placeholder="Escribe aquí..."
+            required
+            autocomplete="off"
+        >
+        <button type="submit">Ejecutar Script</button>
+    </form>
+</main>
+{% endblock %}

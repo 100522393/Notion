@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Proceso iniciado{% endblock %}
+
+{% block body %}
+<main class="container success">
+    <h1>✅ Proceso iniciado</h1>
+    <p>El script se está ejecutando en segundo plano para:</p>
+    <p><strong>{{ nombre }}</strong></p>
+    <p>Esta pestaña permanecerá abierta.</p>
+</main>
+{% endblock %}
