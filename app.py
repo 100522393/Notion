@@ -5,7 +5,7 @@ from flask import Flask, request, Response, render_template
 from pathlib import Path
 import os
 
-from alarma import enviar_alarma_icloud
+from scripts.alarma import enviar_alarma_icloud
 
 app = Flask(__name__)
 
