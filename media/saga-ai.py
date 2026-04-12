@@ -1,15 +1,14 @@
-import google.generativeai as genai
+from google import genai
 import subprocess
 import sys
 import os
+import constants as c
 
 # --- CONSTANTES ---
-# !!! REEMPLAZA ESTAS CLAVES CON LAS TUYAS !!!
-ARCHIVO_A_EJECUTAR = "peli-ai.py"  # Nombre del script de arriba
+ARCHIVO_A_EJECUTAR = "peli-ai.py"
 
 # --- CONFIGURACIÓN INICIAL ---
-genai.configure(api_key=c.GEMINI_API_KEY)
-model = genai.GenerativeModel('models/gemini-2.5-flash')
+gemini_client = genai.Client(api_key=c.GEMINI_API_KEY)
 
 
 def obtener_peliculas_de_saga(nombre_saga):
@@ -17,28 +16,31 @@ def obtener_peliculas_de_saga(nombre_saga):
     print(f"🤖 Preguntando a Gemini por las películas de la saga: '{nombre_saga}'...")
 
     prompt = (
-        f"Dame **únicamente** la lista de las películas que componen la saga '{nombre_saga}', "
+        f"Dame únicamente la lista de las películas que componen la saga '{nombre_saga}', "
         f"incluyendo precuelas, secuelas y spin-offs, sin números, viñetas, ni texto introductorio, "
         f"y separadas por saltos de línea."
     )
 
     try:
-        response = model.generate_content(prompt)
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+
         peliculas = [
             peli.strip()
-            for peli in response.text.split('\n')
+            for peli in response.text.split("\n")
             if peli.strip()
         ]
         return peliculas
+
     except Exception as e:
         print(f"❌ Error al consultar a Gemini: {e}")
         return []
 
 
 def ejecutar_script_por_pelicula(nombre_pelicula, nombre_saga_base):
-    """Ejecuta peli-ai.py pasando la película Y el nombre base de la saga."""
-
-    # Prepara el comando: [intérprete, script, arg_pelicula, arg_saga]
+    """Ejecuta peli-ai.py pasando la película y el nombre base de la saga."""
     comando = [sys.executable, ARCHIVO_A_EJECUTAR, nombre_pelicula, nombre_saga_base]
 
     print(f"\n🚀 Procesando película: **{nombre_pelicula}** (Saga: {nombre_saga_base})")
@@ -51,6 +53,8 @@ def ejecutar_script_por_pelicula(nombre_pelicula, nombre_saga_base):
             check=True
         )
         print(f"✅ Éxito al procesar '{nombre_pelicula}'.")
+        if resultado.stdout.strip():
+            print(resultado.stdout)
 
     except subprocess.CalledProcessError as e:
         print(f"❌ Falla en peli-ai.py al procesar '{nombre_pelicula}'.")
@@ -67,8 +71,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     if len(sys.argv) < 2:
-        print("Uso: python saga_processor.py \"Nombre de la Saga\"")
-        print("Ejemplo: python saga_processor.py \"Star Wars\"")
+        print('Uso: python saga_processor.py "Nombre de la Saga"')
+        print('Ejemplo: python saga_processor.py "Star Wars"')
         sys.exit(1)
 
     nombre_saga = sys.argv[1]
@@ -82,7 +86,6 @@ if __name__ == "__main__":
     print(f"\n--- Se encontraron {len(peliculas_de_la_saga)} películas. Comenzando el proceso ---")
 
     for peli in peliculas_de_la_saga:
-        # Pasa el nombre de la película Y el nombre base de la saga
         ejecutar_script_por_pelicula(peli, nombre_saga)
 
     print("\n🎉 Proceso de saga completado.")

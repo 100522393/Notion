@@ -1,20 +1,16 @@
-import google.generativeai as genai
+from google import genai
 from notion_client import Client
 import json
 import sys
 import requests
 import time
-import os
-import difflib  # <-- NECESARIO PARA COMPARAR NOMBRES
+import difflib
 
-# --- IMPORTACIÓN DE CONSTANTES PROFESIONAL ---
-import constants as c # <--- ¡Aquí está el cambio clave!
-# --------------------------------------------------------------------------
+import constants as c
 
-# --- Inicialización de Clientes (Usando c.) ---
-# Usamos c.NOTION_TOKEN y c.GEMINI_API_KEY
+# --- Inicialización de Clientes ---
 notion = Client(auth=c.NOTION_TOKEN)
-genai.configure(api_key=c.GEMINI_API_KEY)
+gemini_client = genai.Client(api_key=c.GEMINI_API_KEY)
 
 # --- INICIO DEL SCRIPT (manejo de argumentos) ---
 if len(sys.argv) > 1:
@@ -25,28 +21,104 @@ else:
     sys.exit(1)
 
 
-# --- FUNCIONES DE AUTENTICACIÓN IGDB ---
+# ============================================================
+# HELPERS NOTION NUEVA API
+# ============================================================
+
+_data_source_cache = {}
+
+
+def resolver_data_source_id(database_or_data_source_id):
+    """
+    Acepta un ID que puede ser:
+    - un data_source_id real
+    - un database_id antiguo
+
+    Devuelve el data_source_id correcto para la API nueva.
+    """
+    if not database_or_data_source_id:
+        raise ValueError("ID de database/data source vacío.")
+
+    if database_or_data_source_id in _data_source_cache:
+        return _data_source_cache[database_or_data_source_id]
+
+    # 1) Intentar usarlo directamente como data source
+    try:
+        notion.data_sources.retrieve(data_source_id=database_or_data_source_id)
+        _data_source_cache[database_or_data_source_id] = database_or_data_source_id
+        return database_or_data_source_id
+    except Exception:
+        pass
+
+    # 2) Si no funciona, resolverlo desde la database antigua
+    try:
+        db_info = notion.databases.retrieve(database_id=database_or_data_source_id)
+        data_sources = db_info.get("data_sources", [])
+
+        if not data_sources:
+            raise ValueError(
+                f"La database {database_or_data_source_id} no tiene data_sources accesibles."
+            )
+
+        ds_id = data_sources[0]["id"]
+        _data_source_cache[database_or_data_source_id] = ds_id
+        return ds_id
+
+    except Exception as e:
+        raise ValueError(
+            f"No se pudo resolver data_source_id desde '{database_or_data_source_id}': {e}"
+        )
+
+
+def query_data_source(database_or_data_source_id, filter_payload=None, start_cursor=None, page_size=100):
+    ds_id = resolver_data_source_id(database_or_data_source_id)
+
+    kwargs = {
+        "data_source_id": ds_id,
+        "page_size": page_size,
+    }
+
+    if filter_payload:
+        kwargs["filter"] = filter_payload
+    if start_cursor:
+        kwargs["start_cursor"] = start_cursor
+
+    return notion.data_sources.query(**kwargs)
+
+
+def create_page_in_data_source(database_or_data_source_id, properties):
+    ds_id = resolver_data_source_id(database_or_data_source_id)
+    return notion.pages.create(
+        parent={"data_source_id": ds_id},
+        properties=properties
+    )
+
+
+# ============================================================
+# FUNCIONES DE AUTENTICACIÓN IGDB
+# ============================================================
 
 def _obtener_access_token(client_id, client_secret):
     """Obtiene un Access Token válido de Twitch para usar con IGDB."""
     print("Paso 1.1: Obteniendo Access Token de Twitch...")
     token_params = {
-        'client_id': client_id,
-        'client_secret': client_secret,
-        # Usamos c.TWITCH_TOKEN_URL
-        'grant_type': 'client_credentials'
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "client_credentials"
     }
     try:
-        response = requests.post(c.TWITCH_TOKEN_URL, params=token_params) # c.TWITCH_TOKEN_URL
+        response = requests.post(c.TWITCH_TOKEN_URL, params=token_params, timeout=20)
         response.raise_for_status()
         token_data = response.json()
-        return token_data.get('access_token')
+        return token_data.get("access_token")
     except requests.exceptions.RequestException as e:
         print(f"❌ Error al obtener el Token de Twitch. Verifica tus credenciales: {e}")
         return None
 
 
-# --- FUNCIÓN PRINCIPAL DE CARÁTULA IGDB (MODIFICADA CON SIMILITUD) ---
+# ============================================================
+# CARÁTULA IGDB
+# ============================================================
 
 def obtener_cover_url_igdb(nombre_juego, client_id, access_token):
     """
@@ -56,12 +128,11 @@ def obtener_cover_url_igdb(nombre_juego, client_id, access_token):
     print(f"Paso 1.2: Buscando 50 opciones y seleccionando el mejor match por nombre para: '{nombre_juego}'...")
 
     headers = {
-        'Client-ID': client_id,
-        'Authorization': f'Bearer {access_token}',
-        'Accept': 'application/json'
+        "Client-ID": client_id,
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json"
     }
 
-    # 🎯 CONSULTA AQL: Aumentamos el límite a 50 para tener más opciones para comparar
     query_body = f"""
         search "{nombre_juego}";
         fields name, cover.url;
@@ -69,8 +140,7 @@ def obtener_cover_url_igdb(nombre_juego, client_id, access_token):
     """
 
     try:
-        # Usamos c.IGDB_API_URL
-        response = requests.post(f'{c.IGDB_API_URL}/games', headers=headers, data=query_body)
+        response = requests.post(f"{c.IGDB_API_URL}/games", headers=headers, data=query_body, timeout=30)
         response.raise_for_status()
         juegos_data = response.json()
 
@@ -78,52 +148,48 @@ def obtener_cover_url_igdb(nombre_juego, client_id, access_token):
             print(f"❌ No se encontró ningún resultado para '{nombre_juego}'.")
             return None
 
-        # --- Lógica de Similitud de Nombres en Python ---
-
         mejor_match = None
         max_similitud = -1.0
 
-        # Solo consideramos juegos que tienen una carátula (cover.url)
-        juegos_con_caratula = [juego for juego in juegos_data if juego.get('cover', {}).get('url')]
+        juegos_con_caratula = [
+            juego for juego in juegos_data
+            if juego.get("cover", {}).get("url")
+        ]
 
         if not juegos_con_caratula:
             print("❌ Ninguno de los resultados tenía una carátula disponible.")
             return None
 
         for juego in juegos_con_caratula:
-            nombre_oficial = juego['name']
+            nombre_oficial = juego["name"]
+            similitud = difflib.SequenceMatcher(
+                None,
+                nombre_juego.lower(),
+                nombre_oficial.lower()
+            ).ratio()
 
-            # 1. Calculamos la similitud de la cadena (ratio de 0.0 a 1.0)
-            similitud = difflib.SequenceMatcher(None, nombre_juego.lower(), nombre_oficial.lower()).ratio()
-
-            # 2. Seleccionamos el juego con la puntuación más alta
             if similitud > max_similitud:
                 max_similitud = similitud
                 mejor_match = juego
 
-            # Si encontramos una similitud perfecta (1.0), terminamos inmediatamente
             if max_similitud == 1.0:
                 break
 
-        # Si encontramos un match con buena similitud
-        if mejor_match and max_similitud > 0.6:  # Un umbral razonable para evitar basura
-
-            nombre_oficial = mejor_match['name']
-            caratula_url_original = mejor_match['cover']['url']
+        if mejor_match and max_similitud > 0.6:
+            nombre_oficial = mejor_match["name"]
+            caratula_url_original = mejor_match["cover"]["url"]
 
             print(f"✅ Juego seleccionado: **{nombre_oficial}** (Similitud: {max_similitud:.2f})")
 
-            # Procesamiento de la URL para obtener la versión grande
-            caratula_url = caratula_url_original.replace('t_thumb', 't_cover_big')
-            if not caratula_url.startswith('http'):
-                caratula_url = 'https:' + caratula_url
+            caratula_url = caratula_url_original.replace("t_thumb", "t_cover_big")
+            if not caratula_url.startswith("http"):
+                caratula_url = "https:" + caratula_url
 
             return caratula_url
-        else:
-            print(
-                f"❌ La coincidencia más cercana ({mejor_match['name']} con {max_similitud:.2f}) no fue lo suficientemente alta.")
-            return None
 
+        nombre_match = mejor_match["name"] if mejor_match else "Ninguno"
+        print(f"❌ La coincidencia más cercana ({nombre_match} con {max_similitud:.2f}) no fue lo suficientemente alta.")
+        return None
 
     except requests.exceptions.RequestException as e:
         print(f"❌ Error en la solicitud a IGDB: {e}")
@@ -133,13 +199,23 @@ def obtener_cover_url_igdb(nombre_juego, client_id, access_token):
         return None
 
 
+# ============================================================
+# GEMINI
+# ============================================================
+
+def generar_texto_gemini(prompt, model="gemini-2.5-flash"):
+    """Genera texto con el SDK nuevo de Gemini."""
+    response = gemini_client.models.generate_content(
+        model=model,
+        contents=prompt
+    )
+    return response.text.strip() if response.text else ""
+
+
 def obtener_nombre_internacional(nombre_juego):
     """Obtiene el nombre oficial internacional del juego para búsquedas más precisas."""
-    # El modelo ya está configurado con c.GEMINI_API_KEY
-    model = genai.GenerativeModel('models/gemini-2.5-flash')
     prompt = f"Busca el videojuego {nombre_juego} y responde unicamente con su nombre internacional oficial."
-    r = model.generate_content(prompt)
-    nombre_internacional = r.text.strip()
+    nombre_internacional = generar_texto_gemini(prompt)
     print(f"Nombre internacional: {nombre_internacional}")
     return nombre_internacional
 
@@ -147,23 +223,28 @@ def obtener_nombre_internacional(nombre_juego):
 def obtener_datos_juego_json(nombre_juego):
     """Obtiene los datos estructurados del juego desde Gemini."""
     try:
-        # El modelo ya está configurado con c.GEMINI_API_KEY
-        model = genai.GenerativeModel('models/gemini-2.5-flash')
         nombre_internacional = obtener_nombre_internacional(nombre_juego)
 
         instruccion = (
             "Actúa como una base de datos y, dado un nombre de videojuego, "
-            "proporciona solo los siguientes datos en formato JSON. Usa arrays para 'generos' y 'plataformas': "
-            "'nombre_juego', 'fecha_lanzamiento' (YYYY-MM-DD), 'generos', 'plataformas', 'resumen' (máximo 2 frases), "
+            "proporciona solo los siguientes datos en formato JSON. "
+            "Usa arrays para 'generos' y 'plataformas': "
+            "'nombre_juego', 'fecha_lanzamiento' (YYYY-MM-DD), 'generos', "
+            "'plataformas', 'resumen' (máximo 2 frases), "
             "'puntuacion_media' (de 0 a 10), 'duracion_horas', y 'desarrollador'. "
-            "Si no encuentras el juego, responde con un JSON vacío: {}."
+            "Si no encuentras el juego, responde con un JSON vacío: {}. "
+            "No añadas texto fuera del JSON. "
             "El nombre del juego es: "
         )
+
         prompt_completo = instruccion + nombre_internacional
 
         for attempt in range(3):
             try:
-                respuesta = model.generate_content(prompt_completo)
+                respuesta = gemini_client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt_completo
+                )
                 print("Respuesta de Gemini recibida.")
                 return respuesta.text
             except Exception as e:
@@ -177,27 +258,46 @@ def obtener_datos_juego_json(nombre_juego):
         return None
 
 
+# ============================================================
+# NOTION
+# ============================================================
+
 def obtener_o_crear_desarrollador(nombre_desarrollador):
-    """Busca o crea una página de Desarrollador en la BD de Desarrolladores."""
-    if not nombre_desarrollador or nombre_desarrollador.lower() in ["n/a", "null"]: return None
+    """Busca o crea una página de Desarrollador."""
+    if not nombre_desarrollador or str(nombre_desarrollador).strip().lower() in {"n/a", "null"}:
+        return None
+
     try:
         print(f"Buscando Desarrollador '{nombre_desarrollador}'...")
-        # Usamos c.DESARROLLADORES_DATABASE_ID
-        resultados = notion.databases.query(
-            database_id=c.DESARROLLADORES_DATABASE_ID,
-            filter={"property": "Nombre", "title": {"equals": nombre_desarrollador}}
+
+        resultados = query_data_source(
+            c.DESARROLLADORES_DATABASE_ID,
+            filter_payload={
+                "property": "Nombre",
+                "title": {
+                    "equals": nombre_desarrollador
+                }
+            },
+            page_size=10
         )
-        if resultados["results"]:
+
+        if resultados.get("results"):
             print(f"Desarrollador '{nombre_desarrollador}' encontrado.")
             return resultados["results"][0]["id"]
-        else:
-            print(f"Desarrollador '{nombre_desarrollador}' no encontrado. Creando nueva página...")
-            # Usamos c.DESARROLLADORES_DATABASE_ID
-            nueva_pagina = notion.pages.create(
-                parent={"database_id": c.DESARROLLADORES_DATABASE_ID},
-                properties={"Nombre": {"title": [{"text": {"content": nombre_desarrollador}}]}}
-            )
-            return nueva_pagina["id"]
+
+        print(f"Desarrollador '{nombre_desarrollador}' no encontrado. Creando nueva página...")
+        nueva_pagina = create_page_in_data_source(
+            c.DESARROLLADORES_DATABASE_ID,
+            properties={
+                "Nombre": {
+                    "title": [
+                        {"text": {"content": nombre_desarrollador}}
+                    ]
+                }
+            }
+        )
+        return nueva_pagina["id"]
+
     except Exception as e:
         print(f"Ocurrió un error al buscar/crear el desarrollador: {e}")
         return None
@@ -206,59 +306,91 @@ def obtener_o_crear_desarrollador(nombre_desarrollador):
 def crear_pagina_notion(json_data):
     """Crea la página en Notion con los datos del JSON."""
     page_id = None
+
     try:
-        start_index = json_data.find('{')
-        end_index = json_data.rfind('}')
+        start_index = json_data.find("{")
+        end_index = json_data.rfind("}")
         if start_index == -1 or end_index == -1:
             print("No se pudo encontrar un JSON válido en la respuesta de la IA.")
-            return
-        json_string = json_data[start_index: end_index + 1]
+            return None
+
+        json_string = json_data[start_index:end_index + 1]
         data = json.loads(json_string)
 
         if not data:
             print("No se encontraron datos del juego para crear la página.")
-            return
+            return None
 
-        game_name = data.get("nombre_juego", "Juego sin nombre")
+        nombre_juego_final = data.get("nombre_juego", "Juego sin nombre")
 
         developer_id = obtener_o_crear_desarrollador(data.get("desarrollador"))
         relacion_developer = [{"id": developer_id}] if developer_id else []
 
-        generos_list = [{"name": g} for g in data.get("generos", [])]
-        plataformas_list = [{"name": p} for p in data.get("plataformas", [])]
+        generos_list = [
+            {"name": genero}
+            for genero in data.get("generos", [])
+            if genero
+        ]
+        plataformas_list = [
+            {"name": plataforma}
+            for plataforma in data.get("plataformas", [])
+            if plataforma
+        ]
 
-        nueva_pagina = {
-            # Usamos c.JUEGOS_DATABASE_ID
-            "parent": {"database_id": c.JUEGOS_DATABASE_ID},
-            "properties": {
-                "Nombre": {"title": [{"text": {"content": game_name}}]},
-                "Lanzamiento": {"date": {"start": data.get("fecha_lanzamiento", None)}},
-                "Géneros": {"multi_select": generos_list},
-                "Plataforma": {"multi_select": plataformas_list},
-                "Sinopsis": {"rich_text": [{"text": {"content": data.get("resumen", "N/A")}}]},
-                "Puntuación": {"number": data.get("puntuacion_media", 0)},
-                "Duración": {"number": data.get("duracion_horas", 0)},
-                "Desarrollador": {"relation": relacion_developer},
-            }
+        propiedades = {
+            "Nombre": {
+                "title": [
+                    {"text": {"content": nombre_juego_final}}
+                ]
+            },
+            "Lanzamiento": {
+                "date": {
+                    "start": data.get("fecha_lanzamiento")
+                }
+            },
+            "Géneros": {
+                "multi_select": generos_list
+            },
+            "Plataforma": {
+                "multi_select": plataformas_list
+            },
+            "Sinopsis": {
+                "rich_text": [
+                    {"text": {"content": data.get("resumen", "N/A")}}
+                ]
+            },
+            "Puntuación": {
+                "number": data.get("puntuacion_media", 0)
+            },
+            "Duración": {
+                "number": data.get("duracion_horas", 0)
+            },
+            "Desarrollador": {
+                "relation": relacion_developer
+            },
         }
 
-        pagina_creada = notion.pages.create(**nueva_pagina)
+        pagina_creada = create_page_in_data_source(
+            c.JUEGOS_DATABASE_ID,
+            properties=propiedades
+        )
+
         page_id = pagina_creada["id"]
-        print(f"Página de '{game_name}' creada exitosamente en Notion. ID: {page_id}")
+        print(f"Página de '{nombre_juego_final}' creada exitosamente en Notion. ID: {page_id}")
         return page_id
 
     except json.JSONDecodeError as e:
         print(f"El JSON de la IA no es válido después de la limpieza: {e}")
+        return None
     except Exception as e:
         print(f"Ocurrió un error al crear la página en Notion: {e}")
         return None
-    return page_id
 
 
 def actualizar_cover_link_notion(page_id, cover_url, property_name="Cover"):
     """
     Sube la URL de la carátula como un enlace externo a la propiedad tipo
-    Files & Media de Notion (Cover).
+    Files & Media de Notion.
     """
     if not page_id or not cover_url:
         print("No se puede actualizar la propiedad 'Cover' sin un ID de página o una URL válida.")
@@ -267,8 +399,7 @@ def actualizar_cover_link_notion(page_id, cover_url, property_name="Cover"):
     try:
         print(f"-> Subiendo enlace de imagen externo a la propiedad '{property_name}'...")
 
-        # Obtener un nombre base para el archivo (opcional, pero útil)
-        file_name = cover_url.split('/')[-1].split('?')[0]
+        file_name = cover_url.split("/")[-1].split("?")[0] or "cover.jpg"
 
         notion.pages.update(
             page_id=page_id,
@@ -293,7 +424,9 @@ def actualizar_cover_link_notion(page_id, cover_url, property_name="Cover"):
         print(f"❌ Ocurrió un error al subir el enlace de carátula a Notion: {e}")
 
 
-# --- Flujo principal ADAPTADO PARA EL ENLACE EXTERNO ---
+# ============================================================
+# FLUJO PRINCIPAL
+# ============================================================
 
 print("\n--- PASO A: Obtener datos estructurados del juego (JSON) ---")
 datos_json = obtener_datos_juego_json(game_name)
@@ -306,13 +439,9 @@ cover_url = None
 if datos_json:
     print("\n--- PASO B: Preparar la Carátula VÍA IGDB ---")
 
-    # 1. Obtener Access Token de Twitch
-    # Usamos c.TWITCH_CLIENT_ID y c.TWITCH_CLIENT_SECRET
     token = _obtener_access_token(c.TWITCH_CLIENT_ID, c.TWITCH_CLIENT_SECRET)
 
     if token:
-        # 2. Obtener la URL de la portada, seleccionando el mejor match por similitud
-        # Usamos c.TWITCH_CLIENT_ID
         cover_url = obtener_cover_url_igdb(game_name, c.TWITCH_CLIENT_ID, token)
     else:
         print("No se pudo obtener el Access Token. No se buscará la portada.")
@@ -322,7 +451,6 @@ if datos_json:
 
     if page_id and cover_url:
         print("\n--- PASO D: Subir la Carátula como Enlace Externo a la propiedad 'Cover' ---")
-        # 4. Subir la URL a la propiedad "Cover"
         actualizar_cover_link_notion(page_id, cover_url, property_name="Cover")
     elif page_id:
         print("La página fue creada, pero no se pudo adjuntar la carátula.")

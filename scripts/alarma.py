@@ -13,7 +13,7 @@ def enviar_alarma_icloud(hora):
     msg.set_content(f"Activando alarma para las {hora}")
     msg['Subject'] = f"ALARM:{hora}"  # El "trigger" para el iPhone
     msg['From'] = c.ICLOUD_EMAIL
-    msg['To'] = c.ICLOUD_APP_PASSWORD  # Te lo envías a ti mismo
+    msg['To'] = c.ICLOUD_EMAIL  # Te lo envías a ti mismo
 
     try:
         # Configuración del servidor de Apple

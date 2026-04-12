@@ -1,0 +1,5 @@
+google-genai
+flask
+notion-client
+howlongtobeatpy
+python-dotenv
