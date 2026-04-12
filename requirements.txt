@@ -1,5 +1,8 @@
 google-genai
 flask
+gunicorn
 notion-client
 howlongtobeatpy
 python-dotenv
+requests
+cloudinary

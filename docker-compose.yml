@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: notion-app
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     env_file:
       - .env
     restart: unless-stopped
