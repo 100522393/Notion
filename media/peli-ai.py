@@ -379,6 +379,12 @@ def actualizar_cover_link_notion(page_id, cover_url, property_name="Cover"):
                         }
                     ]
                 }
+            },
+            cover={
+                "type": "external",
+                "external": {
+                    "url": cover_url
+                }
             }
         )
 
