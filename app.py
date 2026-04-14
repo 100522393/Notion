@@ -37,6 +37,7 @@ SCRIPTS = {
     "hltb": BASE_DIR / "media/howlongtobeat.py",
     "sueno": BASE_DIR / "sueno/sueno_todos.py",
     "sueno_trigger": BASE_DIR / "sueno/disparador_sueno.py",
+    "actualizar_multimedia": BASE_DIR / "scripts/añadirMultimedia.py"
 }
 
 # =============================================================
@@ -90,6 +91,15 @@ def sueno_todos():
 def sueno():
     try:
         run_script(SCRIPTS["sueno_trigger"])
+    except Exception as e:
+        return f"Error: {e}", 500
+
+    return render_template("close.html")
+
+@app.route('/actualizar_multimedia')
+def actualizar_multimedia():
+    try:
+        run_script(SCRIPTS["actualizar_multimedia"])
     except Exception as e:
         return f"Error: {e}", 500
 
