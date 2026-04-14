@@ -287,7 +287,7 @@ def crear_pagina_notion(json_data):
         )
 
         print(f"Página de '{data.get('nombre_serie', 'N/A')}' creada exitosamente en Notion.")
-        return pagina_creada["id"]
+        return pagina_creada["id"], data.get("nombre_serie", "N/A")
 
     except json.JSONDecodeError as e:
         print(f"El JSON de la IA no es válido después de la limpieza: {e}")
@@ -402,8 +402,49 @@ def actualizar_cover_notion(page_id, cover_url):
 datos_json = obtener_datos_serie_json(show_name)
 print(datos_json)
 
+def normalize_id(value: str) -> str:
+    return value.strip()
+
+def añadir_multimedia(cover_url, page_id, nombre):
+    # TODO: Una vez compruebe que esto funciona lo meto a un archivo que voy a usar en pelis series y juegos como funcion
+    nueva_pagina = {
+        "Nombre": {
+                "title": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": nombre
+                        }
+                    }
+                ]
+            },
+        "Serie": {
+            "relation": [
+                {"id": normalize_id(page_id)}
+            ]
+        },
+        "Cover": {
+            "files": [
+                {
+                    "name": "cover.jpg",
+                    "type": "external",
+                    "external": {
+                        "url": cover_url
+                    }
+                }
+
+            ]
+        }
+    }
+    pagina_creada = create_page_in_data_source(
+        c.MULTIMEDIA_DATABASE_ID,
+        properties=nueva_pagina
+    )
+
+    print(f"Página de {nombre} creada exitosamente en Notion.")
+
 if datos_json:
-    page_id = crear_pagina_notion(datos_json)
+    page_id, nombre = crear_pagina_notion(datos_json)
 
     if page_id:
         print(f"Buscando portada para: {show_name}")
@@ -415,3 +456,4 @@ if datos_json:
             print("No se pudo obtener la portada. La página fue creada sin una.")
 
         crear_capitulos(show_name, page_id)
+        añadir_multimedia(cover_url, page_id, nombre)
