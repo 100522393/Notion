@@ -381,6 +381,12 @@ def actualizar_cover_notion(page_id, cover_url):
 
                     }
                 }
+            },
+            cover = {
+                "type": "external",
+                "external": {
+                    "url": cover_url
+                }
             }
         )
         print(f"Portada de la página '{page_id}' actualizada con éxito.")
