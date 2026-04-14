@@ -372,14 +372,15 @@ def actualizar_cover_notion(page_id, cover_url):
             page_id=page_id,
             properties={
                 "Cover": {
-                    "files": {
-                        "name" : "cover.jpg",
-                        "type": "external",
-                        "external": {
-                            "url": cover_url
+                    "files": [
+                        {
+                            "name" : "cover.jpg",
+                            "type": "external",
+                            "external": {
+                                "url": cover_url
+                            }
                         }
-
-                    }
+                    ]
                 }
             },
             cover = {
