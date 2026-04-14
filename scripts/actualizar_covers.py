@@ -1,20 +1,20 @@
 from notion_client import Client
 import requests
 import time
+import constants as c
 import sys
 
 # --- CONSTANTES ---
 # Reemplaza con tus claves.
-NOTION_TOKEN = "ntn_m12866236193ptit989YPuaiDuz4agnqm0wF52MOtfF02T"
-PELICULAS_DATABASE_ID = "24b04cb051838016803bd575af7c3f88"
-OMDB_API_KEY = "826779cd"
+PELICULAS_DATABASE_ID = c.PELICULAS_DATABASE_ID
+OMDB_API_KEY = c.OMDB_API_KEY
 
 # Nombre de la propiedad que contendrá la URL (DEBE COINCIDIR CON NOTION)
 PROPERTY_COVER_NAME = "Cover"
 
 # Inicialización
 try:
-    notion = Client(auth=NOTION_TOKEN)
+    notion = Client(auth=c.NOTION_TOKEN)
 except Exception as e:
     print(f"Error al inicializar Notion: {e}")
     sys.exit(1)
