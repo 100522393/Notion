@@ -370,10 +370,16 @@ def actualizar_cover_notion(page_id, cover_url):
     try:
         notion.pages.update(
             page_id=page_id,
-            cover={
-                "type": "external",
-                "external": {
-                    "url": cover_url
+            properties={
+                "Cover": {
+                    "files": {
+                        "name" : "cover.jpg",
+                        "type": "external",
+                        "external": {
+                            "url": cover_url
+                        }
+
+                    }
                 }
             }
         )
