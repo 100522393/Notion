@@ -1,6 +1,6 @@
 .idea
 .venv
-export/
+.export/
 .env
 __pycache__/
 *.pyc

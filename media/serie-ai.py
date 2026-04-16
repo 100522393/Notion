@@ -5,6 +5,7 @@ import json
 import sys
 import requests
 import constants as c
+from multimedia import actualizar_multimedia
 
 # --- Inicialización de Clientes ---
 notion = Client(auth=c.NOTION_TOKEN)
@@ -97,7 +98,7 @@ if len(sys.argv) > 1:
     print(f"El nombre de la serie que recibí es: {show_name}")
 else:
     print("Error: No se recibió ningún nombre de serie como argumento.")
-    sys.exit(1)
+    # sys.exit(1)
 
 
 # ============================================================
@@ -398,7 +399,7 @@ def actualizar_cover_notion(page_id, cover_url):
 # ============================================================
 # FLUJO PRINCIPAL
 # ============================================================
-
+show_name = "Narcos"
 datos_json = obtener_datos_serie_json(show_name)
 print(datos_json)
 
@@ -436,7 +437,7 @@ def añadir_multimedia(cover_url, page_id, nombre):
             ]
         }
     }
-    pagina_creada = create_page_in_data_source(
+    create_page_in_data_source(
         c.MULTIMEDIA_DATABASE_ID,
         properties=nueva_pagina
     )
@@ -456,4 +457,4 @@ if datos_json:
             print("No se pudo obtener la portada. La página fue creada sin una.")
 
         crear_capitulos(show_name, page_id)
-        añadir_multimedia(cover_url, page_id, nombre)
+        actualizar_multimedia(cover_url, page_id, nombre, "Serie")

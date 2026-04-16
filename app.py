@@ -206,7 +206,24 @@ def alarma():
         color=COLOR
     )
 
+@app.route('/logs')
+@app.route('/logs')
+def logs():
+    def generate():
+        process = subprocess.Popen(
+            ["sh", "-c", "tail -n 100 /proc/1/fd/1; exec tail -f /proc/1/fd/1"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
 
+        try:
+            for line in process.stdout:
+                yield line
+        finally:
+            process.kill()
+
+    return Response(generate(), mimetype="text/plain")
 # =============================================================
 # 7. RUN
 # =============================================================
