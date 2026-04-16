@@ -1,12 +1,29 @@
 import sys
 import subprocess
 import re
-from flask import Flask, request, Response, render_template
+from flask import Flask, request, Response, render_template, stream_with_context
 from pathlib import Path
 import os
 
 from scripts.alarma import enviar_alarma_icloud
 
+LOG_PATH = "/app/app.log"
+
+def read_last_lines(path, n=100):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return "".join(f.readlines()[-n:])
+    except FileNotFoundError:
+        return "No hay logs todavía.\n"
+
+import logging
+
+class IgnoreLogsContentFilter(logging.Filter):
+    def filter(self, record):
+        return "/logs/content" not in record.getMessage()
+
+log = logging.getLogger("werkzeug")
+log.addFilter(IgnoreLogsContentFilter())
 app = Flask(__name__)
 
 # =============================================================
@@ -60,9 +77,11 @@ def run_script(script_path, *args):
     subprocess.Popen(
         [PYTHON_EXEC, str(script_path), *args],
         cwd=str(BASE_DIR),
-        env=env_config
+        env=env_config,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+        text=True
     )
-
 # =============================================================
 # 4. RUTAS SIMPLES
 # =============================================================
@@ -206,27 +225,19 @@ def alarma():
         color=COLOR
     )
 
-@app.route('/logs')
-@app.route('/logs')
+@app.route("/logs")
 def logs():
-    def generate():
-        process = subprocess.Popen(
-            ["sh", "-c", "tail -n 100 /proc/1/fd/1; exec tail -f /proc/1/fd/1"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True
-        )
+    return render_template("logs.html")
 
-        try:
-            for line in process.stdout:
-                yield line
-        finally:
-            process.kill()
-
-    return Response(generate(), mimetype="text/plain")
+@app.route("/logs/content")
+def logs_content():
+    return Response(
+        read_last_lines("/app/app.log", 200),
+        mimetype="text/plain; charset=utf-8"
+    )
 # =============================================================
 # 7. RUN
 # =============================================================
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False,)

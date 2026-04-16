@@ -22,4 +22,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["python", "app.py"]
+CMD ["sh", "-c", "python -u app.py 2>&1 | tee -a /app/app.log"]
