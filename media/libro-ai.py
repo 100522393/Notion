@@ -4,6 +4,7 @@ import json
 import sys
 import requests
 import constants as c
+from multimedia import actualizar_multimedia
 
 notion = Client(auth=c.NOTION_TOKEN)
 gemini_client = genai.Client(api_key=c.GEMINI_API_KEY)
@@ -102,44 +103,78 @@ else:
 # UTILIDADES
 # ============================================================
 
-def obtener_cover_libro(nombre_libro):
+import time
+import random
+import requests
+
+
+def obtener_cover_libro(nombre_libro, max_retries=5):
     """
-    Obtiene la URL de la portada de un libro usando Google Books.
-    Busca la imagen de mayor calidad disponible.
+    Devuelve la URL de la portada de un libro a partir de su nombre.
+    Usa Google Books y aplica reintentos con backoff exponencial
+    si recibe errores transitorios o rate limiting (429).
     """
-    url = f"https://www.googleapis.com/books/v1/volumes?q=intitle:{nombre_libro}&maxResults=1"
+    if not nombre_libro or not str(nombre_libro).strip():
+        print("Nombre de libro vacío.")
+        return None
 
-    try:
-        response = requests.get(url, timeout=20)
-        response.raise_for_status()
-        data = response.json()
+    url = "https://www.googleapis.com/books/v1/volumes"
+    params = {
+        "q": f'intitle:"{nombre_libro}"',
+        "maxResults": 5,
+        "langRestrict": "es",
+        "printType": "books",
+        "fields": "items(volumeInfo(title,imageLinks)),totalItems",
+    }
 
-        if data.get("totalItems", 0) > 0 and "items" in data:
-            volume_info = data["items"][0].get("volumeInfo", {})
-            image_links = volume_info.get("imageLinks", {})
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json",
+    }
 
-            cover_url = image_links.get("extraLarge")
-            if not cover_url:
-                cover_url = image_links.get("large")
-            if not cover_url:
-                cover_url = image_links.get("medium")
-            if not cover_url:
-                cover_url = image_links.get("small")
-            if not cover_url:
-                cover_url = image_links.get("thumbnail")
+    for intento in range(max_retries):
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=20)
 
-            if cover_url:
-                return cover_url
+            if response.status_code == 429:
+                espera = min(2 ** intento, 30) + random.uniform(0, 1)
+                print(f"Rate limit alcanzado en Google Books. Reintentando en {espera:.1f}s...")
+                time.sleep(espera)
+                continue
 
-            print(f"Se encontró el libro '{nombre_libro}' pero no tenía URL de portada.")
+            response.raise_for_status()
+            data = response.json()
+
+            items = data.get("items", [])
+            if not items:
+                print(f"No se encontraron resultados para: {nombre_libro}")
+                return None
+
+            for item in items:
+                volume_info = item.get("volumeInfo", {})
+                image_links = volume_info.get("imageLinks", {})
+
+                for key in ("extraLarge", "large", "medium", "small", "thumbnail", "smallThumbnail"):
+                    cover_url = image_links.get(key)
+                    if cover_url:
+                        # Google a veces devuelve http; mejor forzar https si existe
+                        return cover_url.replace("http://", "https://")
+
+            print(f"Se encontraron resultados para '{nombre_libro}', pero ninguno tenía portada.")
             return None
 
-        print(f"No se encontraron resultados en Google Books para: {nombre_libro}")
-        return None
+        except requests.exceptions.RequestException as e:
+            if intento < max_retries - 1:
+                espera = min(2 ** intento, 30) + random.uniform(0, 1)
+                print(f"Error de red al obtener la portada: {e}. Reintentando en {espera:.1f}s...")
+                time.sleep(espera)
+                continue
 
-    except requests.exceptions.RequestException as e:
-        print(f"Error al obtener la portada del libro: {e}")
-        return None
+            print(f"Error al obtener la portada del libro: {e}")
+            return None
+
+    print("No se pudo obtener la portada tras varios intentos.")
+    return None
 
 
 def generar_texto_gemini(prompt, model="gemini-2.5-flash"):
@@ -296,7 +331,7 @@ def crear_pagina_notion(json_data):
         )
 
         print(f"Página de '{data.get('nombre_libro', 'N/A')}' creada exitosamente en Notion.")
-        return pagina_creada["id"]
+        return pagina_creada["id"], data.get('nombre_libro', 'N/A')
 
     except json.JSONDecodeError as e:
         print(f"El JSON de la IA no es válido después de la limpieza: {e}")
@@ -358,7 +393,20 @@ def actualizar_cover_notion(page_id, cover_url):
     try:
         notion.pages.update(
             page_id=page_id,
-            cover={
+            properties={
+                "Cover": {
+                    "files": [
+                        {
+                            "name" : "cover.jpg",
+                            "type": "external",
+                            "external": {
+                                "url": cover_url
+                            }
+                        }
+                    ]
+                }
+            },
+            cover = {
                 "type": "external",
                 "external": {
                     "url": cover_url
@@ -369,7 +417,6 @@ def actualizar_cover_notion(page_id, cover_url):
     except Exception as e:
         print(f"Ocurrió un error al actualizar la portada en Notion: {e}")
 
-
 # ============================================================
 # FLUJO PRINCIPAL
 # ============================================================
@@ -378,7 +425,7 @@ datos_json = obtener_datos_libro_json(book_name)
 print(datos_json)
 
 if datos_json:
-    page_id = crear_pagina_notion(datos_json)
+    page_id, nombre = crear_pagina_notion(datos_json)
 
     if page_id:
         print(f"Buscando portada para: {book_name}")
@@ -390,3 +437,4 @@ if datos_json:
             print("No se pudo obtener la portada. La página fue creada sin una.")
 
         crear_capitulos(datos_json, page_id)
+        actualizar_multimedia(cover_url, page_id, nombre, "Libro")

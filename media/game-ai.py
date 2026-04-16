@@ -5,7 +5,7 @@ import sys
 import requests
 import time
 import difflib
-
+from multimedia import actualizar_multimedia
 import constants as c
 
 # --- Inicialización de Clientes ---
@@ -377,7 +377,7 @@ def crear_pagina_notion(json_data):
 
         page_id = pagina_creada["id"]
         print(f"Página de '{nombre_juego_final}' creada exitosamente en Notion. ID: {page_id}")
-        return page_id
+        return page_id, nombre_juego_final
 
     except json.JSONDecodeError as e:
         print(f"El JSON de la IA no es válido después de la limpieza: {e}")
@@ -447,12 +447,13 @@ if datos_json:
         print("No se pudo obtener el Access Token. No se buscará la portada.")
 
     print("\n--- PASO C: Crear página en Notion ---")
-    page_id = crear_pagina_notion(datos_json)
+    page_id, nombre = crear_pagina_notion(datos_json)
 
     if page_id and cover_url:
         print("\n--- PASO D: Subir la Carátula como Enlace Externo a la propiedad 'Cover' ---")
         actualizar_cover_link_notion(page_id, cover_url, property_name="Cover")
     elif page_id:
         print("La página fue creada, pero no se pudo adjuntar la carátula.")
+    actualizar_multimedia(cover_url, page_id, nombre, "Juego")
 
 print("\n--- PROCESO COMPLETADO ---")
