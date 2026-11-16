@@ -10,9 +10,9 @@ import constants as c
 
 # Configuración Cloudinary
 CLOUDINARY_CONFIG = {
-    "cloud_name": "dzqqem54n",
-    "api_key": "984936899817499",
-    "api_secret": "SZFekFZ2NKgekAJAFWDJTX7b7y4"
+    "cloud_name": c.CLOUDINARY_CLOUD_NAME,
+    "api_key": c.CLOUDINARY_API_KEY,
+    "api_secret": c.CLOUDINARY_API_SECRET
 }
 
 # Inicialización de clientes

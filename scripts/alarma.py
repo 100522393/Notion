@@ -4,10 +4,6 @@ import constants as c
 
 
 def enviar_alarma_icloud(hora):
-    # --- CONFIGURACIÓN ---
-    tu_correo_icloud = "nesbe717@icloud.com"  # Tu dirección real
-    password_aplicacion = "rnqf-pvpa-zutr-hnrz"  # La clave de 16 letras de Apple
-
     # Creamos el mensaje
     msg = EmailMessage()
     msg.set_content(f"Activando alarma para las {hora}")

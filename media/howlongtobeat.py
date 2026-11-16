@@ -1,11 +1,10 @@
-import os
 from notion_client import Client
 from howlongtobeatpy import HowLongToBeat
+import constants as c
 
 # --- CONFIGURACIÓN ---
-# ⚠️ Reemplaza estos valores con tu token de Notion y el ID de tu base de datos.
-NOTION_TOKEN = "ntn_m12866236193ptit989YPuaiDuz4agnqm0wF52MOtfF02T"
-DATABASE_ID = "24404cb0518381b4b31ad44e54791150"
+NOTION_TOKEN = c.NOTION_TOKEN
+DATABASE_ID = c.JUEGOS_DATABASE_ID
 
 # El nombre de la propiedad en Notion que contiene el nombre del juego
 GAME_TITLE_PROPERTY = "Name"

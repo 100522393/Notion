@@ -1,9 +1,11 @@
 from notion_client import Client
 
-NOTION_TOKEN = "TU_TOKEN"
+import constants as c
+
+NOTION_TOKEN = c.NOTION_TOKEN
 notion = Client(auth=NOTION_TOKEN)
 
-CAPITULOS_DATABASE_ID = "24b04cb05183802fb87efa3729f1c7c5"
+CAPITULOS_DATABASE_ID = c.CAPITULOS_DATABASE_ID
 
 _data_source_cache = {}
 

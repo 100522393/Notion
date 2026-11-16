@@ -26,6 +26,11 @@ OMDB_API_KEY = os.getenv("OMDB_API_KEY")
 ICLOUD_EMAIL = os.getenv("ICLOUD_EMAIL")
 ICLOUD_APP_PASSWORD = os.getenv("ICLOUD_APP_PASSWORD")
 
+# Cloudinary (alojamiento de las imágenes generadas para el diario)
+CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
+
 # ====================================================
 # II. NOTION: BASES DE DATOS (DATABASE IDs)
 # ====================================================
